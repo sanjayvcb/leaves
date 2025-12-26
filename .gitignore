@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+
+# Environment Variables
+.env
+secrets.toml
+
+# Node.js
+node_modules/
+
+
+
+
+
+# Artifacts
+download.jpg
+
+
