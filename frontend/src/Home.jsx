@@ -6,7 +6,6 @@ function Home() {
     const navigate = useNavigate()
     const [file, setFile] = useState(null)
     const [preview, setPreview] = useState(null)
-    const [imageUrl, setImageUrl] = useState('')
     const [result, setResult] = useState(null)
     const [loading, setLoading] = useState(false)
     const fileInputRef = useRef(null)
@@ -15,7 +14,6 @@ function Home() {
         const selectedFile = e.target.files[0]
         if (selectedFile) {
             setFile(selectedFile)
-            setImageUrl('') // clear url if file is selected
             setPreview(URL.createObjectURL(selectedFile))
             setResult(null)
         }
@@ -47,32 +45,7 @@ function Home() {
         }
     }
 
-    const handleUrlUpload = async () => {
-        if (!imageUrl) return
 
-        setLoading(true)
-        try {
-            // Optimistic preview update if simple image url
-            // setPreview(imageUrl) 
-
-            const response = await fetch(`${config.API_URL}/predict`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: imageUrl }),
-            })
-            const data = await response.json()
-            if (response.ok) {
-                setResult(data)
-            } else {
-                alert('Error: ' + data.error)
-            }
-        } catch (error) {
-            console.error('Error processing URL:', error)
-            alert('Failed to connect to the server.')
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const triggerCamera = () => {
         fileInputRef.current.click()
@@ -141,32 +114,7 @@ function Home() {
                     </button>
                 </div>
 
-                <div className="relative flex py-2 items-center mb-6">
-                    <div className="flex-grow border-t border-slate-200"></div>
-                    <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-semibold uppercase tracking-wider">Or via URL</span>
-                    <div className="flex-grow border-t border-slate-200"></div>
-                </div>
 
-                <div className="flex gap-2 mb-8">
-                    <input
-                        type="text"
-                        placeholder="Paste image URL here..."
-                        value={imageUrl}
-                        onChange={(e) => {
-                            setImageUrl(e.target.value)
-                            setFile(null) // clear file if url is used
-                            if (e.target.value) setPreview(e.target.value)
-                        }}
-                        className="flex-1 shadow-sm appearance-none border border-slate-200 rounded-xl py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all bg-white"
-                    />
-                    <button
-                        onClick={handleUrlUpload}
-                        disabled={!imageUrl || loading}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
-                    >
-                        Go
-                    </button>
-                </div>
 
                 {/* Results Section */}
                 {result && (
@@ -180,23 +128,6 @@ function Home() {
                             <div className="text-right">
                                 <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Confidence</p>
                                 <p className="text-2xl font-black text-emerald-600 leading-none">{(result.confidence * 100).toFixed(1)}%</p>
-                            </div>
-                        </div>
-
-                        <div className="pt-4 border-t border-emerald-100">
-                            <p className="text-xs text-slate-400 mb-2 font-medium">
-                                Other Possibilities:
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {Object.entries(result.all_probs)
-                                    .sort(([, a], [, b]) => b - a)
-                                    .slice(0, 4)
-                                    .map(([name, conf]) => (
-                                        <div key={name} className="flex justify-between items-center text-xs p-2 bg-white/50 rounded-lg">
-                                            <span className="capitalize text-slate-700 font-medium">{name}</span>
-                                            <span className="text-slate-500">{(conf * 100).toFixed(1)}%</span>
-                                        </div>
-                                    ))}
                             </div>
                         </div>
                     </div>

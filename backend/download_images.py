@@ -4,14 +4,17 @@ import time
 from duckduckgo_search import DDGS
 from pathlib import Path
 
-def download_images(keywords, max_images=50):
+def download_images(keywords, max_images=50, base_dir=None):
     for keyword in keywords:
         print(f"Searching for {keyword}...")
         # Create folder based on the leaf name (e.g., "Hibiscus leaf" -> "hibiscus")
-        folder_name = keyword.split(' ')[0].lower()
-        if 'tulasi' in keyword.lower(): folder_name = 'tulasi' # specific handling if needed
+        folder_name = keyword.split(' ')[0].lower()# specific handling if needed
         
-        save_dir = Path(f"dataset/{folder_name}")
+        # Use base_dir if provided, otherwise use relative path
+        if base_dir:
+            save_dir = Path(base_dir) / folder_name
+        else:
+            save_dir = Path(f"dataset/{folder_name}")
         save_dir.mkdir(parents=True, exist_ok=True)
         
         count = 0
@@ -19,6 +22,7 @@ def download_images(keywords, max_images=50):
             with DDGS() as ddgs:
                 # Fetch more than 50 just in case some fail to download
                 results = list(ddgs.images(keyword, max_results=max_images + 30))
+                print(f"Found {len(results)} search results for '{keyword}'")
                 
             for result in results:
                 if count >= max_images:
@@ -43,7 +47,7 @@ def download_images(keywords, max_images=50):
                     print(f"[{count}/{max_images}] Downloaded {folder_name} image")
                     
                 except Exception as e:
-                    # print(f"Failed to download {image_url}: {e}")
+                    print(f"Failed to download {image_url}: {e}")
                     pass
                     
         except Exception as search_err:

@@ -10,6 +10,8 @@ function Training() {
     const [showPreview, setShowPreview] = useState(false)
     const [loadingPreview, setLoadingPreview] = useState(false)
     const [trainedLabels, setTrainedLabels] = useState([])
+    const [selectedFiles, setSelectedFiles] = useState([])
+    const [uploadingFiles, setUploadingFiles] = useState(false)
 
     useEffect(() => {
         // Fetch trained labels on mount
@@ -74,6 +76,51 @@ function Training() {
             alert("Failed to load preview images");
         } finally {
             setLoadingPreview(false);
+        }
+    }
+
+    const handleFileSelect = (e) => {
+        const files = Array.from(e.target.files);
+        setSelectedFiles(files);
+    }
+
+    const handleUpload = async () => {
+        if (!leafName.trim()) {
+            alert('Please enter a leaf name first');
+            return;
+        }
+        if (selectedFiles.length === 0) {
+            alert('Please select images to upload');
+            return;
+        }
+
+        setUploadingFiles(true);
+        try {
+            const formData = new FormData();
+            formData.append('leaf_name', leafName);
+            selectedFiles.forEach(file => {
+                formData.append('images', file);
+            });
+
+            const res = await fetch(`${config.API_URL}/train/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setPreviewImages(data.images);
+                setShowPreview(true);
+                setSelectedFiles([]);
+                alert(`Successfully uploaded ${data.count} images!`);
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to upload images');
+            }
+        } catch (error) {
+            alert("Failed to upload images");
+        } finally {
+            setUploadingFiles(false);
         }
     }
 
@@ -221,6 +268,7 @@ function Training() {
                                         value={leafName}
                                         onChange={(e) => setLeafName(e.target.value)}
                                         placeholder="e.g. Mango"
+                                        required
                                         className="shadow-sm appearance-none border border-slate-200 rounded-xl w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
                                     />
                                     <p className="text-xs text-slate-400 mt-2 ml-1">
@@ -251,12 +299,54 @@ function Training() {
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
-                                            Loading Preview...
+                                            Searching...
                                         </>
                                     ) : (
-                                        'Preview Images'
+                                        'Search'
                                     )}
                                 </button>
+
+                                <div className="mt-4 pt-4 border-t border-slate-200">
+                                    <p className="text-xs text-slate-500 mb-3 text-center">Or upload your own images</p>
+                                    
+                                    <label className="block w-full cursor-pointer">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            capture="environment"
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                        />
+                                        <div className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl border-2 border-dashed border-slate-300 transition-all text-center">
+                                            {selectedFiles.length > 0 ? (
+                                                <span>📁 {selectedFiles.length} file(s) selected</span>
+                                            ) : (
+                                                <span>📤 Choose Images</span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    {selectedFiles.length > 0 && (
+                                        <button
+                                            onClick={handleUpload}
+                                            disabled={uploadingFiles}
+                                            className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-green-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {uploadingFiles ? (
+                                                <>
+                                                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                '✓ Upload & Preview'
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
                             </>
                         )}
                     </div>

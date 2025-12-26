@@ -8,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 import sys
+import requests
 
 # Import from local modules (now in same directory)
 from download_images import download_images
@@ -107,18 +108,31 @@ def cleanup_after_training():
 
 def download_images_for_preview(keyword, max_images=20):
     """Download images and return paths for preview"""
-    print(f"Downloading preview images for {keyword}...")
+    print(f"=== PREVIEW START: Downloading preview images for '{keyword}' ===")
+    sys.stdout.flush()
     folder_name = keyword.split(' ')[0].lower()
+    print(f"Folder name: {folder_name}, Dataset dir: {DATASET_DIR}")
+    sys.stdout.flush()
     
     # Use the download_images function from the module
-    # We need to adapt it slightly for our needs
-    download_images([keyword], max_images=max_images)
+    # Pass DATASET_DIR to ensure images are saved in the correct location
+    print(f"Calling download_images with keyword='{keyword}', max_images={max_images}, base_dir={DATASET_DIR}")
+    sys.stdout.flush()
+    download_images([keyword], max_images=max_images, base_dir=str(DATASET_DIR))
+    print("download_images call completed")
+    sys.stdout.flush()
     
     # Get the downloaded image paths
     save_dir = DATASET_DIR / folder_name
+    print(f"Checking save_dir: {save_dir}, exists: {save_dir.exists()}")
+    sys.stdout.flush()
     if save_dir.exists():
         images = [f for f in save_dir.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        print(f"Found {len(images)} images in {save_dir}")
+        sys.stdout.flush()
         return [str(img.relative_to(DATASET_DIR)) for img in images]
+    print("save_dir does not exist, returning empty list")
+    sys.stdout.flush()
     return []
 
 def prepare_data_split():
@@ -141,7 +155,7 @@ def run_training_workflow(leaf_name):
         # Check if images already exist from preview
         if not (DATASET_DIR / folder_name).exists() or len(list((DATASET_DIR / folder_name).glob('*'))) < 20:
             training_state.update({"status": "downloading", "message": f"Downloading images for {leaf_name}..."})
-            download_images([f"{leaf_name} leaf"], max_images=50)
+            download_images([f"{leaf_name} leaf"], max_images=50, base_dir=str(DATASET_DIR))
         
         # Step 2: Prepare Data
         training_state.update({"status": "preparing", "message": "Organizing dataset..."})
@@ -311,6 +325,54 @@ def get_trained_labels():
         'count': len(labels)
     })
 
+@app.route('/train/upload', methods=['POST'])
+def upload_training_images():
+    """Upload multiple images for training"""
+    try:
+        leaf_name = request.form.get('leaf_name')
+        if not leaf_name:
+            return jsonify({'error': 'Leaf name is required'}), 400
+        
+        files = request.files.getlist('images')
+        if not files or len(files) == 0:
+            return jsonify({'error': 'No images provided'}), 400
+        
+        # Create folder for this leaf type
+        folder_name = leaf_name.split(' ')[0].lower()
+        save_dir = DATASET_DIR / folder_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save each uploaded image
+        uploaded_count = 0
+        uploaded_paths = []
+        
+        for file in files:
+            if file.filename == '':
+                continue
+                
+            # Generate unique filename
+            ext = os.path.splitext(file.filename)[1] or '.jpg'
+            filename = f"{folder_name}_{int(time.time())}_{uploaded_count}{ext}"
+            filepath = save_dir / filename
+            
+            # Save file
+            file.save(str(filepath))
+            uploaded_paths.append(str(filepath.relative_to(DATASET_DIR)))
+            uploaded_count += 1
+        
+        print(f"Uploaded {uploaded_count} images for '{leaf_name}'")
+        
+        return jsonify({
+            'success': True,
+            'count': uploaded_count,
+            'images': [f"/train/images/{path}" for path in uploaded_paths],
+            'leaf_name': leaf_name
+        })
+        
+    except Exception as e:
+        print(f"Upload error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/train/preview', methods=['POST'])
 def preview_training():
     data = request.json
@@ -345,4 +407,5 @@ def serve_training_image(filepath):
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug, host='0.0.0.0', port=port)
