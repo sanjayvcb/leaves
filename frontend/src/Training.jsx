@@ -12,6 +12,7 @@ function Training() {
     const [trainedLabels, setTrainedLabels] = useState([])
     const [selectedFiles, setSelectedFiles] = useState([])
     const [uploadingFiles, setUploadingFiles] = useState(false)
+    const [imageCount, setImageCount] = useState(30)
 
     useEffect(() => {
         // Fetch trained labels on mount
@@ -61,7 +62,10 @@ function Training() {
             const res = await fetch(`${config.API_URL}/train/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ leaf_name: leafName })
+                body: JSON.stringify({ 
+                    leaf_name: leafName,
+                    max_images: imageCount
+                })
             });
             
             if (res.ok) {
@@ -145,6 +149,29 @@ function Training() {
             }
         } catch (error) {
             alert("Failed to start training");
+        }
+    }
+
+    const handleDeleteLabel = async (label) => {
+        if (!window.confirm(`Are you sure you want to delete '${label}'? This will remove all training data for this leaf.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`${config.API_URL}/train/labels/${label}`, {
+                method: 'DELETE',
+            });
+            
+            if (res.ok) {
+                // Refresh list
+                fetchTrainedLabels();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to delete label');
+            }
+        } catch (error) {
+            console.error("Delete error", error);
+            alert("Failed to delete label");
         }
     }
 
@@ -274,14 +301,41 @@ function Training() {
                                     <p className="text-xs text-slate-400 mt-2 ml-1">
                                         We will download sample images for you to review before training.
                                     </p>
+                                    
+                                    <div className="mt-4">
+                                        <label className="block text-slate-500 text-sm font-bold mb-2" htmlFor="count">
+                                            Number of Images
+                                        </label>
+                                        <input
+                                            id="count"
+                                            type="number"
+                                            min="10"
+                                            max="100"
+                                            value={imageCount}
+                                            onChange={(e) => setImageCount(parseInt(e.target.value) || 20)}
+                                            className="shadow-sm appearance-none border border-slate-200 rounded-xl w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
+                                        />
+                                        <p className="text-xs text-slate-400 mt-1 ml-1">
+                                            More images = better accuracy, but longer download time. (Rec: 20-50)
+                                        </p>
+                                    </div>
                                     {trainedLabels.length > 0 && (
                                         <div className="mt-3 p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
                                             <p className="text-xs font-semibold text-blue-700 mb-2">Already Trained:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {trainedLabels.map((label, idx) => (
-                                                    <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-md capitalize">
-                                                        {label}
-                                                    </span>
+                                                    <div key={idx} className="flex items-center bg-blue-100 text-blue-700 text-xs rounded-md pl-2 pr-1 py-1 capitalize border border-blue-200">
+                                                        <span>{label}</span>
+                                                        <button 
+                                                            onClick={() => handleDeleteLabel(label)}
+                                                            className="ml-1 p-0.5 hover:bg-blue-200 rounded-full text-blue-500 hover:text-red-500 transition-colors"
+                                                            title="Delete this class"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </div>

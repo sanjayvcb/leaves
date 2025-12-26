@@ -72,6 +72,17 @@ def add_trained_label(label_name):
         save_trained_labels(labels)
         print(f"Added '{label_name}' to trained labels")
 
+def remove_trained_label(label_name):
+    """Remove a label from the trained labels list"""
+    labels = load_trained_labels()
+    normalized_label = label_name.lower().strip()
+    if normalized_label in labels:
+        labels.remove(normalized_label)
+        save_trained_labels(labels)
+        print(f"Removed '{label_name}' from trained labels")
+        return True
+    return False
+
 def is_label_trained(label_name):
     """Check if a label has already been trained"""
     labels = load_trained_labels()
@@ -330,6 +341,35 @@ def get_trained_labels():
         'count': len(labels)
     })
 
+@app.route('/train/labels/<label_name>', methods=['DELETE'])
+def delete_trained_label(label_name):
+    """Delete a trained label and its dataset"""
+    try:
+        # 1. Remove from trained_labels.json
+        start_time = time.time()
+        was_removed = remove_trained_label(label_name)
+        
+        # 2. Delete dataset folder
+        folder_name = label_name.split(' ')[0].lower()
+        dataset_path = DATASET_DIR / folder_name
+        
+        folder_removed = False
+        if dataset_path.exists():
+            shutil.rmtree(dataset_path)
+            folder_removed = True
+            
+        if not was_removed and not folder_removed:
+            return jsonify({'error': f"Label '{label_name}' not found"}), 404
+            
+        return jsonify({
+            'message': f"Successfully deleted '{label_name}'",
+            'label_removed': was_removed,
+            'folder_removed': folder_removed
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/train/upload', methods=['POST'])
 def upload_training_images():
     """Upload multiple images for training"""
@@ -382,13 +422,14 @@ def upload_training_images():
 def preview_training():
     data = request.json
     leaf_name = data.get('leaf_name')
+    max_images = data.get('max_images', 20)
     
     if not leaf_name:
         return jsonify({'error': 'Leaf name is required'}), 400
     
     try:
         # Download images using the modular function
-        image_paths = download_images_for_preview(f"{leaf_name} leaf", max_images=20)
+        image_paths = download_images_for_preview(f"{leaf_name} leaf", max_images=max_images)
         
         # Return list of image URLs that frontend can fetch
         image_urls = [f"/train/images/{path}" for path in image_paths]
