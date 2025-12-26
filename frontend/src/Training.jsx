@@ -1,10 +1,20 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import config from './config'
 
 function Training() {
     const [leafName, setLeafName] = useState('')
     const [status, setStatus] = useState('idle')
     const [message, setMessage] = useState('')
+    const [previewImages, setPreviewImages] = useState([])
+    const [showPreview, setShowPreview] = useState(false)
+    const [loadingPreview, setLoadingPreview] = useState(false)
+    const [trainedLabels, setTrainedLabels] = useState([])
+
+    useEffect(() => {
+        // Fetch trained labels on mount
+        fetchTrainedLabels();
+    }, []);
 
     useEffect(() => {
         let interval;
@@ -14,14 +24,56 @@ function Training() {
         return () => clearInterval(interval);
     }, [status]);
 
+    const fetchTrainedLabels = async () => {
+        try {
+            const res = await fetch(`${config.API_URL}/train/labels`);
+            const data = await res.json();
+            setTrainedLabels(data.labels || []);
+        } catch (error) {
+            console.error("Failed to fetch trained labels", error);
+        }
+    }
+
     const checkStatus = async () => {
         try {
             const res = await fetch(`${config.API_URL}/train/status`);
             const data = await res.json();
             setStatus(data.status);
             setMessage(data.message);
+            
+            // Reset preview state when training completes
+            if (data.status === 'completed') {
+                setShowPreview(false);
+                setPreviewImages([]);
+                // Refresh trained labels list
+                fetchTrainedLabels();
+            }
         } catch (error) {
             console.error("Polling error", error);
+        }
+    }
+
+    const handlePreview = async () => {
+        setLoadingPreview(true);
+        try {
+            const res = await fetch(`${config.API_URL}/train/preview`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leaf_name: leafName })
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                setPreviewImages(data.images);
+                setShowPreview(true);
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to fetch preview images');
+            }
+        } catch (error) {
+            alert("Failed to load preview images");
+        } finally {
+            setLoadingPreview(false);
         }
     }
 
@@ -35,13 +87,31 @@ function Training() {
             if (res.ok) {
                 setStatus('starting');
                 setMessage('Starting process...');
+                setShowPreview(false);
             } else {
                 const data = await res.json();
-                alert(data.error);
+                if (data.already_trained) {
+                    alert(`⚠️ ${data.error}\n\nPlease choose a different leaf name that hasn't been trained yet.`);
+                } else {
+                    alert(data.error);
+                }
             }
         } catch (error) {
             alert("Failed to start training");
         }
+    }
+
+    const handleCancel = () => {
+        setShowPreview(false);
+        setPreviewImages([]);
+    }
+
+    const handleReset = () => {
+        setStatus('idle');
+        setMessage('');
+        setLeafName('');
+        setShowPreview(false);
+        setPreviewImages([]);
     }
 
     return (
@@ -50,7 +120,7 @@ function Training() {
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/40 rounded-full blur-[100px] pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-200/40 rounded-full blur-[100px] pointer-events-none"></div>
 
-            <div className="z-10 w-full max-w-md bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl shadow-slate-200/50 p-8 transition-all hover:bg-white/80">
+            <div className="z-10 w-full max-w-4xl bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl shadow-slate-200/50 p-8 transition-all hover:bg-white/80">
                 <div className="flex items-center mb-8">
                     <Link to="/" className="mr-4 p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -62,46 +132,133 @@ function Training() {
                     </h1>
                 </div>
 
-                {!status || status === 'idle' || status === 'completed' || status === 'error' ? (
+                {/* Preview Mode */}
+                {showPreview ? (
+                    <div className="space-y-6">
+                        <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-4">
+                            <h2 className="text-lg font-bold text-blue-900 mb-2">Preview: {leafName}</h2>
+                            <p className="text-sm text-blue-700">Found {previewImages.length} images. Review them below and confirm to start training.</p>
+                        </div>
+
+                        {/* Image Gallery */}
+                        <div className="grid grid-cols-4 gap-3 max-h-96 overflow-y-auto p-2 bg-slate-50/50 rounded-xl">
+                            {previewImages.map((imgUrl, idx) => (
+                                <div key={idx} className="aspect-square bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-slate-200">
+                                    <img 
+                                        src={`${config.API_URL}${imgUrl}`} 
+                                        alt={`Preview ${idx + 1}`}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleCancel}
+                                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-xl transition-all active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleStartTraining}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+                            >
+                                Confirm & Start Training
+                            </button>
+                        </div>
+                    </div>
+                ) : !status || status === 'idle' || status === 'completed' || status === 'error' ? (
                     <div className="space-y-6">
                         {status === 'completed' && (
-                            <div className="bg-green-100/50 border border-green-200 text-green-800 p-4 rounded-xl text-center mb-6">
-                                <p className="font-bold">Training Successful!</p>
-                                <p className="text-sm">The model has been updated with the new data.</p>
+                            <div className="space-y-6">
+                                <div className="bg-green-100/50 border border-green-200 text-green-800 p-6 rounded-xl text-center">
+                                    <div className="mb-4">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <p className="font-bold text-xl mb-2">Training Successful!</p>
+                                    <p className="text-sm">The model has been updated with the new data.</p>
+                                </div>
+                                <button
+                                    onClick={handleReset}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+                                >
+                                    Train Another Leaf
+                                </button>
                             </div>
                         )}
 
                         {status === 'error' && (
-                            <div className="bg-red-100/50 border border-red-200 text-red-800 p-4 rounded-xl text-center mb-6">
-                                <p className="font-bold">Error</p>
-                                <p className="text-sm">{message}</p>
-                            </div>
+                            <>
+                                <div className="bg-red-100/50 border border-red-200 text-red-800 p-4 rounded-xl text-center mb-6">
+                                    <p className="font-bold">Error</p>
+                                    <p className="text-sm">{message}</p>
+                                </div>
+                                <button
+                                    onClick={handleReset}
+                                    className="w-full bg-slate-600 hover:bg-slate-700 text-white font-semibold py-3 px-4 rounded-xl transition-all active:scale-95"
+                                >
+                                    Try Again
+                                </button>
+                            </>
                         )}
 
-                        <div>
-                            <label className="block text-slate-500 text-sm font-bold mb-2" htmlFor="leaf">
-                                Leaf Name
-                            </label>
-                            <input
-                                id="leaf"
-                                type="text"
-                                value={leafName}
-                                onChange={(e) => setLeafName(e.target.value)}
-                                placeholder="e.g. Mango"
-                                className="shadow-sm appearance-none border border-slate-200 rounded-xl w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
-                            />
-                            <p className="text-xs text-slate-400 mt-2 ml-1">
-                                We will automatically download 50+ images and train the model.
-                            </p>
-                        </div>
+                        {(!status || status === 'idle') && (
+                            <>
+                                <div>
+                                    <label className="block text-slate-500 text-sm font-bold mb-2" htmlFor="leaf">
+                                        Leaf Name
+                                    </label>
+                                    <input
+                                        id="leaf"
+                                        type="text"
+                                        value={leafName}
+                                        onChange={(e) => setLeafName(e.target.value)}
+                                        placeholder="e.g. Mango"
+                                        className="shadow-sm appearance-none border border-slate-200 rounded-xl w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-2 ml-1">
+                                        We will download sample images for you to review before training.
+                                    </p>
+                                    {trainedLabels.length > 0 && (
+                                        <div className="mt-3 p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
+                                            <p className="text-xs font-semibold text-blue-700 mb-2">Already Trained:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {trainedLabels.map((label, idx) => (
+                                                    <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-md capitalize">
+                                                        {label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
-                        <button
-                            onClick={handleStartTraining}
-                            disabled={!leafName.trim()}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Start Training
-                        </button>
+                                <button
+                                    onClick={handlePreview}
+                                    disabled={!leafName.trim() || loadingPreview}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {loadingPreview ? (
+                                        <>
+                                            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Loading Preview...
+                                        </>
+                                    ) : (
+                                        'Preview Images'
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </div>
                 ) : (
                     <div className="text-center py-12">
@@ -130,4 +287,3 @@ function Training() {
 }
 
 export default Training
-

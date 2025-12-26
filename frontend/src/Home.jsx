@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import config from './config'
 
 function Home() {
     const navigate = useNavigate()
@@ -28,7 +29,7 @@ function Home() {
         formData.append('file', file)
 
         try {
-            const response = await fetch('http://localhost:5000/predict', {
+            const response = await fetch(`${config.API_URL}/predict`, {
                 method: 'POST',
                 body: formData,
             })

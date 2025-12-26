@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from ultralytics import YOLO
 import os
@@ -7,18 +7,19 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from ddgs import DDGS
-import requests
-import random
 import sys
 
-# Add project root to path to ensure we can import unrelated modules if needed
-# (though we are implementing logic directly here for robustness)
+# Import from local modules (now in same directory)
+from download_images import download_images
+from prepare_data_split import split_dataset
+
+# Project paths
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATASET_DIR = PROJECT_ROOT / "dataset"
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 WEIGHTS_PATH = RESULTS_DIR / "weights/best.pt"
+TRAINED_LABELS_FILE = PROJECT_ROOT / "trained_labels.json"
 
 app = Flask(__name__)
 CORS(app)
@@ -42,88 +43,105 @@ def load_model():
 
 model = load_model()
 
+# --- Label Tracking Functions ---
+
+def load_trained_labels():
+    """Load the list of trained labels from JSON file"""
+    if TRAINED_LABELS_FILE.exists():
+        try:
+            import json
+            with open(TRAINED_LABELS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_trained_labels(labels):
+    """Save the list of trained labels to JSON file"""
+    import json
+    with open(TRAINED_LABELS_FILE, 'w') as f:
+        json.dump(labels, f, indent=2)
+
+def add_trained_label(label_name):
+    """Add a label to the trained labels list"""
+    labels = load_trained_labels()
+    normalized_label = label_name.lower().strip()
+    if normalized_label not in labels:
+        labels.append(normalized_label)
+        save_trained_labels(labels)
+        print(f"Added '{label_name}' to trained labels")
+
+def is_label_trained(label_name):
+    """Check if a label has already been trained"""
+    labels = load_trained_labels()
+    normalized_label = label_name.lower().strip()
+    return normalized_label in labels
+
+def cleanup_after_training():
+    """Delete dataset and data folders after training to save space"""
+    try:
+        # Delete dataset folder
+        if DATASET_DIR.exists():
+            shutil.rmtree(DATASET_DIR)
+            print("Cleaned up dataset folder")
+        
+        # Delete data folder (train/val split)
+        if DATA_DIR.exists():
+            shutil.rmtree(DATA_DIR)
+            print("Cleaned up data folder")
+        
+        # Keep only the weights in results folder
+        # Delete everything except weights folder
+        if RESULTS_DIR.exists():
+            for item in RESULTS_DIR.iterdir():
+                if item.name != 'weights':
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+            print("Cleaned up results folder (kept weights)")
+    except Exception as e:
+        print(f"Cleanup error: {e}")
+
 # --- Helper Functions ---
 
-def download_images_task(keyword, max_images=50):
-    print(f"Searching for {keyword}...")
+def download_images_for_preview(keyword, max_images=20):
+    """Download images and return paths for preview"""
+    print(f"Downloading preview images for {keyword}...")
     folder_name = keyword.split(' ')[0].lower()
-    if 'tulasi' in keyword.lower(): folder_name = 'tulasi'
     
+    # Use the download_images function from the module
+    # We need to adapt it slightly for our needs
+    download_images([keyword], max_images=max_images)
+    
+    # Get the downloaded image paths
     save_dir = DATASET_DIR / folder_name
-    save_dir.mkdir(parents=True, exist_ok=True)
-    
-    count = 0
-    downloaded = 0
-    
-    try:
-        with DDGS() as ddgs:
-            results = list(ddgs.images(keyword, max_results=max_images + 30))
-            
-        for result in results:
-            if downloaded >= max_images:
-                break
-            
-            image_url = result['image']
-            try:
-                response = requests.get(image_url, timeout=5)
-                response.raise_for_status()
-                
-                ext = '.jpg'
-                if 'png' in image_url.lower(): ext = '.png'
-                elif 'jpeg' in image_url.lower(): ext = '.jpg'
-                
-                # Check if file exists to avoid duplicates/overwrite if mostly same
-                file_path = save_dir / f"{folder_name}_{int(time.time())}_{downloaded}{ext}"
-                
-                with open(file_path, 'wb') as f:
-                    f.write(response.content)
-                
-                downloaded += 1
-                # print(f"[{downloaded}/{max_images}] Downloaded")
-                
-            except Exception:
-                pass
-                
-    except Exception as search_err:
-        print(f"Search failed: {search_err}")
-        raise search_err
+    if save_dir.exists():
+        images = [f for f in save_dir.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        return [str(img.relative_to(DATASET_DIR)) for img in images]
+    return []
 
 def prepare_data_split():
-    # Clear existing data dir to ensure fresh split including new class
+    """Prepare train/val split using the existing module"""
+    # Clear existing data dir to ensure fresh split
     if DATA_DIR.exists():
         shutil.rmtree(DATA_DIR)
     
-    train_dir = DATA_DIR / "train"
-    val_dir = DATA_DIR / "val"
-    
-    classes = [d.name for d in DATASET_DIR.iterdir() if d.is_dir()]
-    
-    for cls in classes:
-        (train_dir / cls).mkdir(parents=True, exist_ok=True)
-        (val_dir / cls).mkdir(parents=True, exist_ok=True)
-        
-        cls_path = DATASET_DIR / cls
-        images = [f for f in cls_path.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
-        random.shuffle(images)
-        
-        # 80/20 split
-        split_idx = int(len(images) * 0.8)
-        train_imgs = images[:split_idx]
-        val_imgs = images[split_idx:]
-        
-        for img in train_imgs:
-            shutil.copy2(img, train_dir / cls / img.name)
-        for img in val_imgs:
-            shutil.copy2(img, val_dir / cls / img.name)
+    # Use the split_dataset function from the module
+    split_dataset(str(DATASET_DIR), train_ratio=0.8)
 
 def run_training_workflow(leaf_name):
     global model
     global training_state
     
     try:
-        # Step 1: Download
-        training_state.update({"status": "downloading", "message": f"Downloading images for {leaf_name}..."})
-        download_images_task(f"{leaf_name} leaf")
+        # Step 1: Download (if not already downloaded in preview)
+        folder_name = leaf_name.split(' ')[0].lower()
+        
+        # Check if images already exist from preview
+        if not (DATASET_DIR / folder_name).exists() or len(list((DATASET_DIR / folder_name).glob('*'))) < 20:
+            training_state.update({"status": "downloading", "message": f"Downloading images for {leaf_name}..."})
+            download_images([f"{leaf_name} leaf"], max_images=50)
         
         # Step 2: Prepare Data
         training_state.update({"status": "preparing", "message": "Organizing dataset..."})
@@ -160,9 +178,18 @@ def run_training_workflow(leaf_name):
         # validation metrics
         metrics = results.results_dict if hasattr(results, 'results_dict') else str(results)
         
+        # Step 5: Cleanup and save label
+        training_state.update({"status": "finalizing", "message": "Cleaning up temporary files..."})
+        
+        # Add label to trained labels
+        add_trained_label(leaf_name)
+        
+        # Cleanup dataset and data folders
+        cleanup_after_training()
+        
         training_state.update({
             "status": "completed", 
-            "message": "Training successful! content updated.",
+            "message": "Training successful! Model updated and temporary files cleaned.",
             "result": {
                 "metrics": metrics
             }
@@ -246,6 +273,13 @@ def start_train():
     
     if not leaf_name:
         return jsonify({'error': 'Leaf name is required'}), 400
+    
+    # Check if label is already trained
+    if is_label_trained(leaf_name):
+        return jsonify({
+            'error': f"'{leaf_name}' has already been trained. Please choose a different leaf name.",
+            'already_trained': True
+        }), 409
         
     if training_state['status'] in ['downloading', 'preparing', 'training']:
         return jsonify({'error': 'Training already in progress'}), 409
@@ -267,6 +301,47 @@ def start_train():
 @app.route('/train/status', methods=['GET'])
 def get_status():
     return jsonify(training_state)
+
+@app.route('/train/labels', methods=['GET'])
+def get_trained_labels():
+    """Get list of all trained labels"""
+    labels = load_trained_labels()
+    return jsonify({
+        'labels': labels,
+        'count': len(labels)
+    })
+
+@app.route('/train/preview', methods=['POST'])
+def preview_training():
+    data = request.json
+    leaf_name = data.get('leaf_name')
+    
+    if not leaf_name:
+        return jsonify({'error': 'Leaf name is required'}), 400
+    
+    try:
+        # Download images using the modular function
+        image_paths = download_images_for_preview(f"{leaf_name} leaf", max_images=20)
+        
+        # Return list of image URLs that frontend can fetch
+        image_urls = [f"/train/images/{path}" for path in image_paths]
+        
+        return jsonify({
+            'success': True,
+            'images': image_urls,
+            'count': len(image_urls),
+            'leaf_name': leaf_name
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/train/images/<path:filepath>')
+def serve_training_image(filepath):
+    """Serve images from the dataset directory"""
+    try:
+        return send_from_directory(DATASET_DIR, filepath)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

@@ -1,7 +1,7 @@
 import os
 import requests
 import time
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from pathlib import Path
 
 def download_images(keywords, max_images=50):
