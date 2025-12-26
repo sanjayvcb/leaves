@@ -81,7 +81,7 @@ function Training() {
 
     const handleFileSelect = (e) => {
         const files = Array.from(e.target.files);
-        setSelectedFiles(files);
+        setSelectedFiles(prev => [...prev, ...files]);
     }
 
     const handleUpload = async () => {
@@ -314,7 +314,6 @@ function Training() {
                                             type="file"
                                             multiple
                                             accept="image/*"
-                                            capture="environment"
                                             onChange={handleFileSelect}
                                             className="hidden"
                                         />
