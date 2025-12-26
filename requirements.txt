@@ -1,0 +1,6 @@
+gradio
+ultralytics
+pillow
+opencv-python-headless
+torch
+torchvision

@@ -11,9 +11,12 @@ def split_dataset(source_dir, train_ratio=0.8):
     train_dir = data_path / "train"
     val_dir = data_path / "val"
     
+    # Always recreate data directory to ensure it tracks all current classes
     if data_path.exists():
-        print("Data directory already exists. Skipping split to avoid duplicates.")
-        return
+        print("Removing existing data directory...")
+        shutil.rmtree(data_path)
+
+    data_path.mkdir(exist_ok=True)
 
     classes = [d.name for d in source_path.iterdir() if d.is_dir()]
     print(f"Found classes: {classes}")

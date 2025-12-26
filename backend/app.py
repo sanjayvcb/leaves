@@ -79,18 +79,23 @@ def is_label_trained(label_name):
     return normalized_label in labels
 
 def cleanup_after_training():
-    """Delete dataset and data folders after training to save space"""
+    """Clean up data folder and temporary files, but KEEP dataset for future training"""
     try:
-        # Delete dataset folder
-        if DATASET_DIR.exists():
-            shutil.rmtree(DATASET_DIR)
-            print("Cleaned up dataset folder")
+        # NOTE: We MUST keep DATASET_DIR so we can include these images 
+        # when training future leaves. If we delete it, the model will 
+        # forget previous classes!
         
-        # Delete data folder (train/val split)
+        # Delete data folder (split dataset) - we recreate this each time
         if DATA_DIR.exists():
             shutil.rmtree(DATA_DIR)
-            print("Cleaned up data folder")
-        
+            print("Cleaned up data directory")
+            
+        # Optional: Clean up runs folder if it exists (YOLO artifacts)
+        runs_dir = PROJECT_ROOT / "runs"
+        if runs_dir.exists():
+            shutil.rmtree(runs_dir)
+            print("Cleaned up runs directory")
+            
         # Keep only the weights in results folder
         # Delete everything except weights folder
         if RESULTS_DIR.exists():
