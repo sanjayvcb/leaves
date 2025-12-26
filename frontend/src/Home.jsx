@@ -5,6 +5,7 @@ function Home() {
     const navigate = useNavigate()
     const [file, setFile] = useState(null)
     const [preview, setPreview] = useState(null)
+    const [imageUrl, setImageUrl] = useState('')
     const [result, setResult] = useState(null)
     const [loading, setLoading] = useState(false)
     const fileInputRef = useRef(null)
@@ -13,6 +14,7 @@ function Home() {
         const selectedFile = e.target.files[0]
         if (selectedFile) {
             setFile(selectedFile)
+            setImageUrl('') // clear url if file is selected
             setPreview(URL.createObjectURL(selectedFile))
             setResult(null)
         }
@@ -38,6 +40,33 @@ function Home() {
             }
         } catch (error) {
             console.error('Error uploading file:', error)
+            alert('Failed to connect to the server.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleUrlUpload = async () => {
+        if (!imageUrl) return
+
+        setLoading(true)
+        try {
+            // Optimistic preview update if simple image url
+            // setPreview(imageUrl) 
+
+            const response = await fetch('http://localhost:5000/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: imageUrl }),
+            })
+            const data = await response.json()
+            if (response.ok) {
+                setResult(data)
+            } else {
+                alert('Error: ' + data.error)
+            }
+        } catch (error) {
+            console.error('Error processing URL:', error)
             alert('Failed to connect to the server.')
         } finally {
             setLoading(false)
@@ -108,6 +137,33 @@ function Home() {
                         ) : (
                             'Identify Leaf'
                         )}
+                    </button>
+                </div>
+
+                <div className="relative flex py-2 items-center mb-6">
+                    <div className="flex-grow border-t border-slate-200"></div>
+                    <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-semibold uppercase tracking-wider">Or via URL</span>
+                    <div className="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <div className="flex gap-2 mb-8">
+                    <input
+                        type="text"
+                        placeholder="Paste image URL here..."
+                        value={imageUrl}
+                        onChange={(e) => {
+                            setImageUrl(e.target.value)
+                            setFile(null) // clear file if url is used
+                            if (e.target.value) setPreview(e.target.value)
+                        }}
+                        className="flex-1 shadow-sm appearance-none border border-slate-200 rounded-xl py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all bg-white"
+                    />
+                    <button
+                        onClick={handleUrlUpload}
+                        disabled={!imageUrl || loading}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                        Go
                     </button>
                 </div>
 
