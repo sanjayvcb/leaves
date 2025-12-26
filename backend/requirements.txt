@@ -1,0 +1,6 @@
+flask
+flask-cors
+ultralytics
+duckduckgo-search
+requests
+pillow
