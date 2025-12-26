@@ -54,7 +54,7 @@ function Home() {
             // Optimistic preview update if simple image url
             // setPreview(imageUrl) 
 
-            const response = await fetch('http://localhost:5000/predict', {
+            const response = await fetch(`${config.API_URL}/predict`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: imageUrl }),

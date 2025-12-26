@@ -14,7 +14,7 @@ import sys
 
 # Add project root to path to ensure we can import unrelated modules if needed
 # (though we are implementing logic directly here for robustness)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 DATASET_DIR = PROJECT_ROOT / "dataset"
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
@@ -269,4 +269,5 @@ def get_status():
     return jsonify(training_state)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)

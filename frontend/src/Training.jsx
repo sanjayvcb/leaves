@@ -16,7 +16,7 @@ function Training() {
 
     const checkStatus = async () => {
         try {
-            const res = await fetch('http://localhost:5000/train/status');
+            const res = await fetch(`${config.API_URL}/train/status`);
             const data = await res.json();
             setStatus(data.status);
             setMessage(data.message);
@@ -27,7 +27,7 @@ function Training() {
 
     const handleStartTraining = async () => {
         try {
-            const res = await fetch('http://localhost:5000/train/start', {
+            const res = await fetch(`${config.API_URL}/train/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ leaf_name: leafName })
