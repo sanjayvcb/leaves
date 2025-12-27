@@ -9,6 +9,7 @@ function Training() {
     const [previewImages, setPreviewImages] = useState([])
     const [showPreview, setShowPreview] = useState(false)
     const [loadingPreview, setLoadingPreview] = useState(false)
+    const [trainingResult, setTrainingResult] = useState(null)
     const [trainedLabels, setTrainedLabels] = useState([])
     const [selectedFiles, setSelectedFiles] = useState([])
     const [uploadingFiles, setUploadingFiles] = useState(false)
@@ -43,9 +44,12 @@ function Training() {
             const data = await res.json();
             setStatus(data.status);
             setMessage(data.message);
-            
+
             // Reset preview state when training completes
             if (data.status === 'completed') {
+                if (data.result) {
+                    setTrainingResult(data.result);
+                }
                 setShowPreview(false);
                 setPreviewImages([]);
                 // Refresh trained labels list
@@ -62,12 +66,12 @@ function Training() {
             const res = await fetch(`${config.API_URL}/train/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     leaf_name: leafName,
                     max_images: imageCount
                 })
             });
-            
+
             if (res.ok) {
                 const data = await res.json();
                 setPreviewImages(data.images);
@@ -161,7 +165,7 @@ function Training() {
             const res = await fetch(`${config.API_URL}/train/labels/${label}`, {
                 method: 'DELETE',
             });
-            
+
             if (res.ok) {
                 // Refresh list
                 fetchTrainedLabels();
@@ -218,8 +222,8 @@ function Training() {
                         <div className="grid grid-cols-4 gap-3 max-h-96 overflow-y-auto p-2 bg-slate-50/50 rounded-xl">
                             {previewImages.map((imgUrl, idx) => (
                                 <div key={idx} className="aspect-square bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-slate-200">
-                                    <img 
-                                        src={`${config.API_URL}${imgUrl}`} 
+                                    <img
+                                        src={`${config.API_URL}${imgUrl}`}
                                         alt={`Preview ${idx + 1}`}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
@@ -257,7 +261,52 @@ function Training() {
                                         </svg>
                                     </div>
                                     <p className="font-bold text-xl mb-2">Training Successful!</p>
-                                    <p className="text-sm">The model has been updated with the new data.</p>
+                                    <p className="text-sm border-b border-green-200 pb-4 mb-4">The model has been updated with the new data.</p>
+
+                                    {/* Metrics Display */}
+                                    {trainingResult && trainingResult.metrics && (
+                                        <div className="text-left bg-white/50 rounded-lg p-3 text-sm">
+                                            <p className="font-bold text-green-900 mb-2">Results:</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {typeof trainingResult.metrics === 'object' ? (
+                                                    // Display key metrics if available
+                                                    <>
+                                                        <div className="bg-green-100 p-2 rounded">
+                                                            <span className="block text-xs text-green-700">Top-1 Accuracy</span>
+                                                            <span className="font-bold text-green-900">
+                                                                {trainingResult.metrics['metrics/accuracy_top1']
+                                                                    ? `${(trainingResult.metrics['metrics/accuracy_top1'] * 100).toFixed(1)}%`
+                                                                    : 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-green-100 p-2 rounded">
+                                                            <span className="block text-xs text-green-700">Top-5 Accuracy</span>
+                                                            <span className="font-bold text-green-900">
+                                                                {trainingResult.metrics['metrics/accuracy_top5']
+                                                                    ? `${(trainingResult.metrics['metrics/accuracy_top5'] * 100).toFixed(1)}%`
+                                                                    : 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                        {/* List other useful metrics safely */}
+                                                        {Object.entries(trainingResult.metrics)
+                                                            .filter(([k]) => !k.includes('accuracy')) // Filter out what we already showed
+                                                            .slice(0, 4) // Limit to 4 other metrics to save space
+                                                            .map(([key, value]) => (
+                                                                <div key={key} className="bg-green-50/50 p-2 rounded col-span-2 flex justify-between">
+                                                                    <span className="text-xs text-green-800 text-ellipsis overflow-hidden">{key}</span>
+                                                                    <span className="font-mono text-xs font-bold text-green-900">
+                                                                        {typeof value === 'number' ? value.toFixed(4) : value}
+                                                                    </span>
+                                                                </div>
+                                                            ))
+                                                        }
+                                                    </>
+                                                ) : (
+                                                    <pre className="text-xs whitespace-pre-wrap col-span-2">{JSON.stringify(trainingResult.metrics, null, 2)}</pre>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <button
                                     onClick={handleReset}
@@ -301,7 +350,7 @@ function Training() {
                                     <p className="text-xs text-slate-400 mt-2 ml-1">
                                         We will download sample images for you to review before training.
                                     </p>
-                                    
+
                                     <div className="mt-4">
                                         <label className="block text-slate-500 text-sm font-bold mb-2" htmlFor="count">
                                             Number of Images
@@ -326,7 +375,7 @@ function Training() {
                                                 {trainedLabels.map((label, idx) => (
                                                     <div key={idx} className="flex items-center bg-blue-100 text-blue-700 text-xs rounded-md pl-2 pr-1 py-1 capitalize border border-blue-200">
                                                         <span>{label}</span>
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleDeleteLabel(label)}
                                                             className="ml-1 p-0.5 hover:bg-blue-200 rounded-full text-blue-500 hover:text-red-500 transition-colors"
                                                             title="Delete this class"
@@ -362,7 +411,7 @@ function Training() {
 
                                 <div className="mt-4 pt-4 border-t border-slate-200">
                                     <p className="text-xs text-slate-500 mb-3 text-center">Or upload your own images</p>
-                                    
+
                                     <label className="block w-full cursor-pointer">
                                         <input
                                             type="file"
