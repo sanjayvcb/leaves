@@ -1,5 +1,5 @@
-backend/dataset/
-backend/data/
-backend/__pycache__/
-backend/*.pyc
-backend/.env
+dataset/
+data/
+__pycache__/
+*.pyc
+.env
