@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+.env
+venv/
+node_modules/
+dataset/
+data/
+runs/
+results/
+# Keep weights but ignore other training artifacts if desired
+# For now, we ignore local results except the best.pt if you wanted to bake it in
+# But usually we might want to mount a volume or use cloud storage for persistence.
+# For simplicity, we'll exclude large data folders.
