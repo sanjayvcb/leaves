@@ -3,9 +3,9 @@ import shutil
 import random
 from pathlib import Path
 
-def split_dataset(source_dir, train_ratio=0.8):
+def split_dataset(source_dir, output_dir="data", train_ratio=0.8):
     source_path = Path(source_dir)
-    data_path = Path("data")
+    data_path = Path(output_dir)
     
     # Create train and val directories
     train_dir = data_path / "train"

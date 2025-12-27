@@ -13,7 +13,7 @@ function Training() {
     const [trainedLabels, setTrainedLabels] = useState([])
     const [selectedFiles, setSelectedFiles] = useState([])
     const [uploadingFiles, setUploadingFiles] = useState(false)
-    const [imageCount, setImageCount] = useState(30)
+    const [imageCount, setImageCount] = useState('')
 
     useEffect(() => {
         // Fetch trained labels on mount
@@ -62,13 +62,19 @@ function Training() {
 
     const handlePreview = async () => {
         setLoadingPreview(true);
+        const count = parseInt(imageCount);
+        if (!count || count < 5) {
+            alert("Please enter a valid number of images (at least 5)");
+            setLoadingPreview(false);
+            return;
+        }
         try {
             const res = await fetch(`${config.API_URL}/train/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     leaf_name: leafName,
-                    max_images: imageCount
+                    max_images: count
                 })
             });
 
@@ -361,7 +367,7 @@ function Training() {
                                             min="10"
                                             max="100"
                                             value={imageCount}
-                                            onChange={(e) => setImageCount(parseInt(e.target.value) || 20)}
+                                            onChange={(e) => setImageCount(e.target.value)}
                                             className="shadow-sm appearance-none border border-slate-200 rounded-xl w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all bg-white"
                                         />
                                         <p className="text-xs text-slate-400 mt-1 ml-1">

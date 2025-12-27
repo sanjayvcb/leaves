@@ -9,7 +9,7 @@ if MODEL_PATH.exists():
     model = YOLO(str(MODEL_PATH))
     print(f"✅ Loaded trained model from {MODEL_PATH}")
 else:
-    model = YOLO("backend/yolov8n-cls.pt")
+    model = YOLO("yolov8s-cls.pt")
     print("⚠️ Using base model (no trained weights found)")
 
 # Load trained labels

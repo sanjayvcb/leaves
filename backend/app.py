@@ -35,7 +35,7 @@ training_state = {
 
 def load_model():
     try:
-        path = str(WEIGHTS_PATH) if WEIGHTS_PATH.exists() else 'yolov8n-cls.pt'
+        path = str(WEIGHTS_PATH) if WEIGHTS_PATH.exists() else 'yolov8s-cls.pt'
         print(f"Loading model from: {path}")
         return YOLO(path)
     except Exception as e:
@@ -158,7 +158,7 @@ def prepare_data_split():
         shutil.rmtree(DATA_DIR)
     
     # Use the split_dataset function from the module
-    split_dataset(str(DATASET_DIR), train_ratio=0.8)
+    split_dataset(str(DATASET_DIR), output_dir=str(DATA_DIR), train_ratio=0.8)
 
 def run_training_workflow(leaf_name):
     global model
@@ -182,11 +182,21 @@ def run_training_workflow(leaf_name):
         
         # Load base model for training (can use 'yolov8n-cls.pt' or existing 'best.pt')
         # Using existing best.pt to fine-tune is usually better if classes are added
-        train_model = YOLO('yolov8n-cls.pt') 
+        train_model = YOLO('yolov8s-cls.pt') 
+        
+        # Verify data directory exists
+        if not DATA_DIR.exists():
+            raise FileNotFoundError(f"Data directory not found at: {DATA_DIR}")
+        
+        # Check for train/val folders
+        if not (DATA_DIR / 'train').exists() or not (DATA_DIR / 'val').exists():
+             raise FileNotFoundError(f"Data directory missing train/val folders at: {DATA_DIR}")
+
+        print(f"Training with data path: {str(DATA_DIR.resolve())}")
         
         # Train
         results = train_model.train(
-            data=str(DATA_DIR),
+            data=str(DATA_DIR.resolve()), # key change: ensure absolute resolved path
             epochs=20, # Keep it short for demo; increase for real usage
             imgsz=224,
             batch=16,

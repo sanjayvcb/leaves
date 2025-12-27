@@ -1,7 +1,7 @@
 import os
 import requests
 import time
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from pathlib import Path
 
 def download_images(keywords, max_images=50, base_dir=None):
@@ -19,18 +19,34 @@ def download_images(keywords, max_images=50, base_dir=None):
         
         count = 0
         try:
-            with DDGS() as ddgs:
-                # Fetch more than 50 just in case some fail to download
-                results = list(ddgs.images(keyword, max_results=max_images + 30))
-                print(f"Found {len(results)} search results for '{keyword}'")
-                
+            results = []
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    with DDGS() as ddgs:
+                        # Fetch more than 50 just in case some fail to download
+                        results = list(ddgs.images(keyword, max_results=max_images + 30))
+                        if results:
+                            print(f"Found {len(results)} search results for '{keyword}'")
+                            break
+                except Exception as e:
+                    print(f"Attempt {attempt+1}/{max_retries} failed for '{keyword}': {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 * (attempt + 1)) # Exponential backoff: 2s, 4s, ...
+            
+            if not results:
+                print(f"Could not find any images for '{keyword}' after {max_retries} attempts")
+                continue
+
             for result in results:
                 if count >= max_images:
                     break
                 
                 image_url = result['image']
                 try:
-                    response = requests.get(image_url, timeout=5)
+                    # Add user-agent to avoid some 403s from image hosts
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                    response = requests.get(image_url, timeout=5, headers=headers)
                     response.raise_for_status()
                     
                     # Determine extension or default to .jpg
@@ -47,7 +63,7 @@ def download_images(keywords, max_images=50, base_dir=None):
                     print(f"[{count}/{max_images}] Downloaded {folder_name} image")
                     
                 except Exception as e:
-                    print(f"Failed to download {image_url}: {e}")
+                    # print(f"Failed to download {image_url}: {e}") # Reduce noise
                     pass
                     
         except Exception as search_err:
