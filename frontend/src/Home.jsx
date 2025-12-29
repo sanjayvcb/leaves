@@ -77,7 +77,7 @@ function Home() {
                     <input
                         type="file"
                         accept="image/*"
-                        capture="environment" // Hints mobile to use camera
+
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         onChange={handleFileChange}
                         ref={fileInputRef}
